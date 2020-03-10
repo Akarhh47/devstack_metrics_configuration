@@ -1,0 +1,154 @@
+# instructions for metrics collection in OpenStack devstack ( any  branch )
+#this is a simple followup instruction if you want to enable gnocchi and ceilometer for metrics collection in your OpenStack VIM by Idris Badmus (University of Oulu, idris.badmus@oulu.fi)
+
+#1. The Local.conf file
+#	a. Edit your local.conf file to contain the following
+
+enable_plugin ceilometer https://git.openstack.org/openstack/ceilometer stable/rocky
+ENABLED_SERVICES+=,ceilometer-acompute,ceilometer-acentral,ceilometer-collector,ceilometer-api
+enable_service ceilometer
+
+
+CEILOMETER_PIPELINE_INTERVAL=30
+CEILOMETER_BACKEND=gnocchi
+
+
+enable_plugin gnocchi https://github.com/gnocchixyz/gnocchi stable/4.2
+enable_service gnocchi-api,gnocchi-metricd
+enable_service gnocchi-grafana
+
+enable_plugin aodh https://git.openstack.org/openstack/aodh
+ENABLED_SERVICES+=,ceilometer-alarm-notify,ceilometer-alarm-eval
+
+
+#always know you can do anything with openstack devstack, that you can do on the normal deployment 
+#so far you have the right configuration in the local.conf.
+
+#2. First unstack your openstack then stack again 
+./unstack.sh #before new local.conf
+./stack.sh #after adding new local.conf
+
+#after installation
+
+#3. login to dashboard and download the admin-openrc.sh file,  
+#source rc file in terminal 
+source ~/Downloads/admin-openrc.sh 
+#enter openstack password
+
+#4. in the terminal continue do the following steps, 
+#basically, you need to authenticate gnocchi after sourcing the rc file. that's always the problem after installing the plugin
+#so here is the general error, after installing plugin
+bozz@bozz:~$  gnocchi resource list
+The request you have made requires authentication. (HTTP 401)
+
+#or 
+
+The request you have made requires authentication. (HTTP 401)
+bozz@bozz:~$ source ~/Downloads/admin-openrc.sh
+Please enter your OpenStack Password for project admin as user admin: 
+bozz@bozz:~$  gnocchi resource list
+The request you have made requires authentication. (HTTP 401)
+
+#so error continues after sourcing admin rc, so you need to seperately source gnocchi for gnocchi #authetication  
+
+#first, check if gnocchi api is accessable,
+sudo gnocchi-api
+#or depending 
+sudo gnocchi-api -p 8041 -b 0.0.0.0
+
+#if gnocchi api is accessable, 
+
+
+#5. Upgrade ceilometer
+ceilometer-upgrade
+
+
+#6. Now source the gnocchi as as seperate admin. and do the following
+
+bozz@bozz:~$ export OS_PROJECT_DOMAIN_NAME=Default
+bozz@bozz:~$ export OS_USER_DOMAIN_NAME=Default
+bozz@bozz:~$ export OS_PROJECT_NAME=service
+bozz@bozz:~$ export OS_USERNAME=gnocchi
+bozz@bozz:~$ export OS_PASSWORD=1234567890
+bozz@bozz:~$ export OS_AUTH_URL=http://19.3.0.3/identity/v3
+bozz@bozz:~$ export OS_IDENTITY_API_VERSION=3
+bozz@bozz:~$ export OS_IMAGE_API_VERSION=2
+bozz@bozz:~$ export OS_AUTH_TYPE=password
+bozz@bozz:~$ openstack role add --project service --user gnocchi admin
+
+
+#7.After this, check gnocchi metric list of resource list
+gnocchi metric list
+
+
+#8 If there is still any error, then you should source admin-rc again for openstack
+
+source ~/Downloads/admin-openrc.sh 
+
+#9. try any gnocchi command again, gnocchi metric or resource list...
+#you should see a very long list of all possible metrics that can be collected from your VIM...
+#So long list..
+
+Something like this
+bozz@bozz:~$ gnocchi metric list
++--------------------------------------+---------------------+---------------------------------+-----------+--------------------------------------+
+| id                                   | archive_policy/name | name                            | unit      | resource_id                          |
++--------------------------------------+---------------------+---------------------------------+-----------+--------------------------------------+
+| 0037544b-bb8c-4b54-9ee9-e1b4b03b9f11 | low                 | network.outgoing.bytes          | B         | 005794b3-aad1-53ad-943a-58f44a08082b |
+| 0072d200-4835-48b1-aabd-33114f5a3cc8 | low                 | network.incoming.bytes.rate     | B/s       | df8e1cac-91f9-5bc4-9d18-836197d64a76 |
+| 00a7024f-9c46-44d7-ade8-4cea7358222f | low                 | disk.device.read.latency        | ns        | 2460511c-0f21-5fd8-8a43-5a165dbd88ef |
+| 011597df-9d93-4e79-ba24-ebae7ac50c74 | low                 | disk.device.write.requests.rate | request/s | f6b245d9-83ac-5a64-91cb-c7aada4ef16b |
+| 01940216-f242-4df0-b570-5b85d3b1ed7b | low                 | disk.device.read.bytes          | B         | a9298a85-1b2e-5420-b223-a11ab2c3f6eb |
+| 01ab471d-36af-4715-802b-24de7f4b4363 | low                 | memory                          | MB        | ed3b4d52-aa44-43f2-8c75-b90004e4a94f |
+| 01b4f6f8-8f65-4881-a7f6-8712dfca6c7e | low                 | network.incoming.bytes.rate     | B/s       | a707cc6c-637b-56b8-9222-babbb63a477e |
+| 01eb7e23-45a5-48be-bf06-c18791d50a68 | low                 | disk.device.read.latency        | ns        | 9a453369-596e-5c4b-bc8c-8a3c357aa56a |
+| 023ce2d1-85e1-41d5-9880-ddc06ad8e145 | low                 | cpu.delta                       | ns        | 168b7a95-1fd4-4496-9b78-969ee1b200c4 |
+| 029d2e2f-b959-4cd3-a31e-97de16e85fa1 | low                 | network.incoming.packets        | packet    | 00418c2f-d12c-5eab-ac8e-0efa9bc7c0a9 |
+| 02c90318-8909-4700-8d3a-a32fcc39521b | low                 | disk.usage                      | B         | 524c5bca-563f-4007-b239-e4f88329e70b |
+| 041faed3-6e7c-4979-ad8d-da7af8d9e12d | low                 | network.incoming.packets.rate   | packet/s  | f9d9ad2f-e1f9-55da-aca4-f42131d2325e |
+| 049331d4-737e-4412-9b50-c388b3129b58 | low                 | disk.device.write.requests      | request   | f6b245d9-83ac-5a64-91cb-c7aada4ef16b |
+| 04a21049-ce7a-49b7-9552-6a044dae5cdd | low                 | disk.device.read.bytes.rate     | B/s       | 9a453369-596e-5c4b-bc8c-8a3c357aa56a |
+| 04f040ca-d0ff-4ffa-b347-50e73cb8be5a | low                 | disk.allocation                 | B         | 524c5bca-563f-4007-b239-e4f88329e70b |
+| 0579d83e-9dde-46de-ab36-003f6ec267a4 | low                 | disk.allocation                 | B         | ed3b4d52-aa44-43f2-8c75-b90004e4a94f |
+| 0587730f-4022-42d7-a7da-6760cc68515f | low                 | image.size                      | B         | c65cbebf-864e-46bb-9e1c-dad24ef0f953 |
+| 0622e501-edde-42f2-b056-439b445c5d95 | low                 | disk.device.read.latency        | ns        | a9298a85-1b2e-5420-b223-a11ab2c3f6eb |
+| 0627bc97-7f5b-4095-8138-ee953e1a169b | low                 | network.outgoing.bytes          | B         | 54f5ea80-11af-503a-b2a6-1c83c8153533 |
+| 062b438e-12c8-47cc-bc64-e66a59f6aad4 | low                 | network.outgoing.packets        | packet    | 87e0c68a-1363-59e5-b3b4-29400ebf3d1b |
+| 064e4b5e-5c54-451d-9167-dfdc2037ada7 | low                 | disk.read.bytes.rate            | B/s       | a521e1f7-95b4-47de-abe2-1d661e10a9ee |
+| 078ff269-51b1-4108-b17d-19a20bfa5de5 | low                 | disk.read.requests.rate         | request/s | ed3b4d52-aa44-43f2-8c75-b90004e4a94f |
+| 08fc9de3-a258-46ee-b4bf-0225c4df5b6a | low                 | cpu_util                        | %         | aec1ddc7-eae8-4807-89b2-5a1398586151 |
+| 095c22ac-7b76-42f0-9f26-4d5ffa7c34d9 | low                 | network.outgoing.packets.rate   | packet/s  | e5ed1ad9-4e1c-58b9-a723-53e1f5a5f560 |
+| 09a1f189-3cb3-461a-8795-61e694ab889d | low                 | network.outgoing.packets        | packet    | d68bb326-8514-5a04-a5fe-97b71caa068c |
+| 09d81d80-c10a-4953-ac39-b3bd28adc694 | low                 | disk.device.write.requests.rate | request/s | 96fbaff2-7679-5570-8507-b65005c1d957 |
+| 0a3a0b46-0583-4b84-96ec-b3cd82dcbed6 | low                 | network.incoming.packets        | packet    | 478c4bed-dcf4-58e9-9db9-5c1c8ac2ce0c |
+| 0c331b33-c90f-43e4-a422-1bc700cad755 | low                 | network.outgoing.bytes.rate     | B/s       | b551e431-17a9-5d71-9a3d-86487ca73166 |
+| 0c656f86-bdc6-4c63-8a94-0011a3c64d24 | low                 | network.incoming.bytes.rate     | B/s       | 87e0c68a-1363-59e5-b3b4-29400ebf3d1b |
+| 0da6de07-0d84-4c5f-bc8a-4d7c3ecbf19a | low                 | network.incoming.bytes          | B         | df8e1cac-91f9-5bc4-9d18-836197d64a76 |
+| 0e574473-8a6f-442e-b5ac-0e34efd0d316 | low                 | disk.allocation                 | B         | 3aa114e6-9911-426f-a2e3-32ea007496d1 |
+| 0f4a24fe-6d6a-4da5-9e5a-ef0ea6096161 | low                 | network.incoming.bytes.rate     | B/s       | 10adfcec-8a20-544a-9b89-729f4c73cbd3 |
+| 0fc11387-1230-4252-99dd-dd0019a3ea00 | low                 | disk.device.write.requests.rate | request/s | 54c5067c-52d7-51e8-b22b-eb37944050e9 |
+| 0fdabaa5-3f6d-4d00-8627-cb12b85d923b | low                 | memory.swap.out                 | MB        | ed3b4d52-aa44-43f2-8c75-b90004e4a94f |
+| 0fe41b26-44a1-4043-b858-afa6688c73cd | low                 | disk.device.write.bytes         | B         | f6b245d9-83ac-5a64-91cb-c7aada4ef16b |
+| 113c7f46-0abb-49af-9c4b-d516f8491370 | low                 | memory.swap.in                  | MB        | 524c5bca-563f-4007-b239-e4f88329e70b |
+| 11423196-ae73-4265-8128-bafe30f44bc2 | low                 | memory                          | MB        | be8294e3-3cee-4192-9ce1-36aa7a02ab94 |
+| 122ad70a-e911-420f-8827-06a4147399dd | low                 | memory.swap.in                  | MB        | be8294e3-3cee-4192-9ce1-36aa7a02ab94 |
+| 12cf6e2a-2e7a-467b-9df9-67d0f033550b | low                 | disk.device.write.requests      | request   | 9a453369-596e-5c4b-bc8c-8a3c357aa56a |
+| 12d4e938-86a9-46d6-a90c-18bcb827948c | low                 | disk.device.write.requests      | request   | a9298a85-1b2e-5420-b223-a11ab2c3f6eb |
+| 14b464ca-e376-4feb-8d58-d96dbae993bb | low                 | disk.device.write.latency       | ns        | 54c5067c-52d7-51e8-b22b-eb37944050e9 |
+| 14e0bf9b-5274-40b4-8e48-d8a512c08d89 | low                 | memory.resident                 | MB        | be8294e3-3cee-4192-9ce1-36aa7a02ab94 |
+| 150164e0-67c3-4196-80ad-babf390f9eca | low                 | disk.read.requests.rate         | request/s | aec1ddc7-eae8-4807-89b2-5a1398586151 |
+| 15b569d1-2dab-4b6a-92ce-cdd6a890f765 | low                 | network.outgoing.packets        | packet    | f9d9ad2f-e1f9-55da-aca4-f42131d2325e |
+| 1646ec3f-51dc-48d8-8cee-f2a1ba5b4788 | low                 | network.incoming.bytes          |
+
+
+#etc...
+
+#10. If you didin't find the list, just start your instance on OSM, where the metrics is to be collected,  check if MON is up, and check your graph, if you can see the metrics you want to collect, like CPU utilization, memory utilization, packet sent and packet received, then your METRICS AT THE VIM is WORKING. 
+
+you can try gnocchi metric list again ...
+
+that's all, gnocchi API is exposed, authenticated an VIM is ready to allow metrics collection 
+
+
+
+
